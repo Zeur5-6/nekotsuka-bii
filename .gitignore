@@ -40,10 +40,14 @@ live2d_native/build/
 # Claude Code ローカル設定
 .claude/
 
-# 不要ファイル（残骸・バックアップ）
+# 不要ファイル（残骸・バックアップ・開発メモ）
 live2d_server_backup.py
 /package.json
 /package-lock.json
+check_models_clean.py
+list_models.py
+list_models_file.py
+live2d_native/NEXT_STEPS.md
 
 # Python
 __pycache__/
