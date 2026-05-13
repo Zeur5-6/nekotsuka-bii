@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐱 猫使ビィ</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background: transparent;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-app-region: drag;
+            /* ウィンドウをドラッグ可能に */
+        }
+
+        #live2d-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            background: rgba(0, 0, 0, 0.01);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #live2d-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: move;
+            -webkit-app-region: no-drag;
+            /* これがないとマウスイベントが発火しない */
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 5px;
+            z-index: 1000;
+            -webkit-app-region: no-drag;
+            /* コントロールパネルはドラッグ無効 */
+        }
+
+        .control-btn {
+            width: 30px;
+            height: 30px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .status-indicator {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border-radius: 5px;
+            font-size: 10px;
+            -webkit-app-region: no-drag;
+        }
+
+        .status-indicator.connected {
+            background: rgba(39, 174, 96, 0.7);
+        }
+
+        .status-indicator.disconnected {
+            background: rgba(231, 76, 60, 0.7);
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            -webkit-app-region: no-drag;
+        }
+
+        #loading h2 {
+            margin-bottom: 10px;
+        }
+
+        #loading p {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="live2d-container">
+        <div id="loading">
+            <h2>🐱 猫使ビィ</h2>
+            <p>Live2Dモデルを読み込み中...</p>
+            <p id="status-text">Pythonサーバーに接続中...</p>
+        </div>
+        <canvas id="live2d-canvas"></canvas>
+
+        <div class="control-panel">
+            <button class="control-btn" id="log-btn" title="ログ表示">📜</button>
+            <button class="control-btn" id="minimize-btn" title="最小化">─</button>
+            <button class="control-btn" id="close-btn" title="閉じる">×</button>
+        </div>
+
+        <div class="status-indicator disconnected" id="status-indicator" style="display: none;">
+            🔴 未接続
+        </div>
+
+        <!-- 字幕コンテナ -->
+        <div id="subtitle-container"></div>
+
+        <!-- ログコンテナ -->
+        <div id="log-container" style="display: none;">
+            <div id="log-header">
+                <span>会話ログ</span>
+                <button id="log-close-btn">×</button>
+            </div>
+            <div id="log-content"></div>
+        </div>
+
+        <div id="chat-container">
+            <button id="vision-btn" title="画面を見せる（最小化して撮影）">👁️</button>
+            <input type="text" id="chat-input" placeholder="会話を入力してEnter..." autocomplete="off">
+        </div>
+    </div>
+
+    <!-- Live2D Cubism SDK -->
+    <!-- オフライン対応: ローカルにダウンロードした公式Coreを使用 -->
+    <script src="./lib/live2dcubismcore.min.js"></script>
+
+    <style>
+        #subtitle-container {
+            position: absolute;
+            bottom: 80px;
+            /* 入力バーの上 */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 600px;
+            text-align: center;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            pointer-events: none;
+            /* クリックスルー */
+            z-index: 1500;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 10px;
+            border-radius: 10px;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        #log-container {
+            position: absolute;
+            top: 50px;
+            left: 20px;
+            width: 300px;
+            height: 400px;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 2500;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(5px);
+            font-size: 13px;
+            color: #eee;
+            -webkit-app-region: no-drag;
+        }
+
+        #log-header {
+            padding: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+        }
+
+        #log-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        #log-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        /* スクロールバーのカスタマイズ */
+        #log-content::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #log-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+            line-height: 1.4;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 4px;
+        }
+
+        .log-entry.user {
+            color: #4db6ac;
+        }
+
+        .log-entry.bot {
+            color: #ffb74d;
+        }
+
+        .timestamp {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-right: 5px;
+        }
+
+        #chat-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            max-width: 450px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 2000;
+            -webkit-app-region: no-drag;
+            /* 入力可能にする */
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #vision-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        #vision-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.8);
+        }
+
+        #vision-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 下部にマウスが来た時、または入力にフォーカスがある時に表示 */
+        #live2d-container:hover #chat-container,
+        #chat-container:focus-within {
+            opacity: 1;
+        }
+
+        #chat-input {
+            flex: 1;
+            width: auto;
+            padding: 10px 15px;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            font-size: 14px;
+            outline: none;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #chat-input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        #chat-input:focus {
+            background: rgba(0, 0, 0, 0.8);
+            border-color: rgba(255, 255, 255, 0.6);
+        }
+    </style>
+    <!-- PixiJS and pixi-live2d-display from node_modules -->
+    <script>
+        // Electronでは、nodeIntegrationが有効なため、requireが使用可能
+        const path = require('path');
+
+        // PixiJSを読み込む（Live2DモデルにはWebGLが必要）
+        try {
+            // 通常のpixi.jsを使用（WebGL必須）
+            const PIXI = require('pixi.js');
+            // グローバルスコープにPIXIを設定（pixi-live2d-displayが参照するため）
+            window.PIXI = PIXI;
+            global.PIXI = PIXI;
+            globalThis.PIXI = PIXI;
+            console.log('PIXI loaded:', typeof window.PIXI);
+        } catch (e) {
+            console.error('PIXI読み込みエラー:', e);
+            // フォールバック: pixi.js-legacyを試す（WebGLが利用できない場合）
+            try {
+                const PIXI = require('pixi.js-legacy');
+                window.PIXI = PIXI;
+                global.PIXI = PIXI;
+                globalThis.PIXI = PIXI;
+                console.warn('⚠️ PIXI (legacy) loaded - WebGL may not be available');
+            } catch (e2) {
+                console.error('PIXI読み込みエラー（フォールバック）:', e2);
+            }
+        }
+
+        // Cubism SDKが読み込まれた後にpixi-live2d-displayを初期化
+        function initPixiLive2D() {
+            // Cubism SDKが読み込まれているか確認
+            if (typeof Live2DCubismCore === 'undefined') {
+                console.warn('Cubism SDKが読み込まれていません。再試行します...');
+                setTimeout(initPixiLive2D, 100);
+                return;
+            }
+
+            // pixi-live2d-displayを読み込む（Cubism 4専用）
+            try {
+                // Cubism 4 SDKを明示的に設定
+                if (typeof Live2DCubismCore !== 'undefined') {
+                    // PIXIがグローバルスコープに設定されていることを確認
+                    if (!global.PIXI) {
+                        global.PIXI = window.PIXI;
+                    }
+                    if (!globalThis.PIXI) {
+                        globalThis.PIXI = window.PIXI;
+                    }
+
+                    // pixi-live2d-displayのCubism 4専用バージョンを読み込む
+                    const live2dDisplay = require('pixi-live2d-display/cubism4');
+
+                    // 手動でPIXI.live2dに登録
+                    if (!window.PIXI.live2d) {
+                        window.PIXI.live2d = {};
+                    }
+                    if (!global.PIXI.live2d) {
+                        global.PIXI.live2d = {};
+                    }
+                    if (!globalThis.PIXI.live2d) {
+                        globalThis.PIXI.live2d = {};
+                    }
+
+                    // エクスポートされたメンバーをPIXI.live2dに登録
+                    Object.keys(live2dDisplay).forEach(key => {
+                        if (key !== 'default' && key !== '__esModule') {
+                            window.PIXI.live2d[key] = live2dDisplay[key];
+                            global.PIXI.live2d[key] = live2dDisplay[key];
+                            globalThis.PIXI.live2d[key] = live2dDisplay[key];
+                        }
+                    });
+
+                    console.log('pixi-live2d-display (Cubism 4) loaded');
+                    console.log('Live2DCubismCore:', typeof Live2DCubismCore);
+                    console.log('PIXI.live2d:', window.PIXI.live2d);
+                    console.log('PIXI.live2d keys:', Object.keys(window.PIXI.live2d || {}));
+                } else {
+                    throw new Error('Cubism SDKが読み込まれていません');
+                }
+            } catch (e) {
+                console.error('pixi-live2d-display読み込みエラー:', e);
+                console.error('エラー詳細:', e.message);
+                console.error('スタック:', e.stack);
+            }
+        }
+
+        // Cubism SDKの読み込みを待つ
+        window.addEventListener('load', () => {
+            setTimeout(initPixiLive2D, 500);
+        });
+    </script>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>

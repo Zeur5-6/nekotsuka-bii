@@ -1,0 +1,24 @@
+# 猫使ビィ - 必須依存関係
+
+# 1. サーバー & AIコア
+requests
+python-dotenv
+google-genai
+sentence-transformers
+numpy
+
+# 2. 画像認識・操作
+Pillow
+pyautogui
+# pygetwindow (一部ロジックで使用)
+pygetwindow
+
+# 3. 音声・通信
+websockets
+pygame
+pyaudio
+# SpeechRecognition (将来用/WebUI用)
+SpeechRecognition
+
+# 4. Web UI (Optional)
+streamlit

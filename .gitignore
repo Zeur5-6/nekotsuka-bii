@@ -1,0 +1,68 @@
+# 環境変数・シークレット
+.env
+.env.local
+vts_token.json
+
+# データベース（個人の記憶データ）
+bii_memory.db
+
+# 個人情報・キャラクター設定
+my_knowledge.txt
+
+# 生成ファイル
+available_models.txt
+
+# デバッグ出力
+debug_vision.png
+
+# Live2Dモデル（再配布禁止）
+live2d_app/models/
+
+# Live2D Cubism Core / Native SDK（再配布禁止・独自ライセンス）
+live2d_app/lib/
+live2d_native/sdk/
+
+# 旧バージョンのコード・個人データ含む
+old_assets/
+
+# Visual Studio 生成ファイル
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+x64/
+x86/
+Debug/
+Release/
+live2d_native/build/
+
+# Claude Code ローカル設定
+.claude/
+
+# 不要ファイル（残骸・バックアップ）
+live2d_server_backup.py
+/package.json
+/package-lock.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Node.js
+node_modules/
+dist/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.cursor/
+.idea/
+.vscode/

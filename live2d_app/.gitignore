@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+models/
+*.model3.json
+*.moc3
+*.physics3.json
+*.exp3.json
+*.motion3.json
+*.texture.png
