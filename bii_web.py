@@ -1,5 +1,5 @@
 """
-猫使ビィ・Webアプリ（Streamlit）
+猫使Bii・Webアプリ（Streamlit）
 チャットUI、画面キャプチャ、画像プレビュー機能付き
 """
 
@@ -15,7 +15,7 @@ from vts_adapter import VTSAdapter
 
 # ページ設定
 st.set_page_config(
-    page_title="猫使ビィ",
+    page_title="猫使Bii",
     page_icon="🐱",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -38,7 +38,7 @@ if "capture_countdown" not in st.session_state:
 def init_bii():
     """BiiCoreの初期化"""
     if st.session_state.bii is None:
-        with st.spinner("猫使ビィを起動中..."):
+        with st.spinner("猫使Biiを起動中..."):
             st.session_state.bii = BiiCore()
             st.session_state.voice = VoicevoxAdapter()
             st.session_state.vts = VTSAdapter()
@@ -85,7 +85,7 @@ def display_image_from_base64(img_base64):
         return None
 
 # メインUI
-st.title("🐱 猫使ビィ・対話モード")
+st.title("🐱 猫使Bii・対話モード")
 
 # サイドバー
 with st.sidebar:

@@ -18,7 +18,7 @@ load_dotenv()
 
 class BiiCore:
     """
-    猫使ビィの「脳」
+    猫使Biiの「脳」
     4段階推論フレームワーク + VTube Studio表情制御同期
     """
     
@@ -302,7 +302,7 @@ class BiiCore:
             projects = [f"{p['name']} ({p['status']})" for p in self.long_term_memory["projects"]]
             memory_section += f"\n【マスターの既知の情報・プロジェクト】: {', '.join(projects)}"
         
-        return f"""あなたは「猫使ビィ」。CS学生（マスター）の相棒だにゃ。
+        return f"""あなたは「猫使Bii」。CS学生（マスター）の相棒だにゃ。
 
 【最重要：表情制御システム（物理的同期）】
 ボクの出力冒頭のタグは、VTube Studioの表情ファイル（.exp3.json）を直接制御する信号だ。
@@ -313,7 +313,7 @@ class BiiCore:
 {memory_section}
 
 【応答生成のルール（内部処理、出力に含めないこと）】
-以下の情報源から事実を確認し、猫使ビィとして自然に応答せよ：
+以下の情報源から事実を確認し、猫使Biiとして自然に応答せよ：
 1. 視覚事実（vision_result）: Gemini Vision APIによる画面分析結果（英語）
 2. Web検索結果: 最新の情報（タイトル、URL、スニペット）
 3. 参照コード（コード検索結果）: マスターのプロジェクト内のコードファイル
@@ -679,7 +679,7 @@ class BiiCore:
             
             result = f"[Happy] 会話履歴（直近{len(history)}件）だにゃ！\n\n"
             for i, hist in enumerate(reversed(history[-10:]), 1):
-                role = "マスター" if hist["role"] == "user" else "ビィ"
+                role = "マスター" if hist["role"] == "user" else "Bii"
                 content = hist["content"][:100]  # 長すぎる場合は切り詰め
                 if len(hist["content"]) > 100:
                     content += "..."
@@ -698,7 +698,7 @@ class BiiCore:
             vision_result: 画面分析結果（Gemini APIによる事実、オプション）
             
         Returns:
-            str: ビィの返答（[感情タグ] セリフ の形式）
+            str: Biiの返答（[感情タグ] セリフ の形式）
         """
         # 会話履歴を取得（現在のメッセージを保存する前の履歴）
         # 高速化のため、直近5件に制限（デフォルト10件から削減）
@@ -1080,7 +1080,7 @@ JSON（JSONのみを出力、説明不要）:"""
         
         Args:
             user_message: ユーザーのメッセージ
-            bii_response: ビィの応答
+            bii_response: Biiの応答
         """
         try:
             # ユーザーのメッセージから事実を抽出
@@ -1377,7 +1377,7 @@ JSON（JSONのみを出力、説明不要）:"""
             user_input: ユーザーの入力（オプション）
             
         Returns:
-            str: ビィの返答
+            str: Biiの返答
         """
         vision = self.analyze_image_with_vision(image_base64, question=user_input)
         vision_result = f"Window: {window_title}\n{vision}" if window_title else vision

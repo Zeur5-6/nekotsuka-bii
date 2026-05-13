@@ -1,5 +1,5 @@
 """
-猫使ビィ・デスクトップ常駐型アプリ
+猫使Bii・デスクトップ常駐型アプリ
 Live2Dモデルをデスクトップ上に常駐表示し、音声入力で操作可能
 """
 
@@ -18,11 +18,11 @@ import speech_recognition as sr
 import queue
 
 class BiiDesktopApp:
-    """猫使ビィ・デスクトップ常駐アプリ"""
+    """猫使Bii・デスクトップ常駐アプリ"""
     
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("🐱 猫使ビィ・デスクトップ常駐")
+        self.root.title("🐱 猫使Bii・デスクトップ常駐")
         self.root.geometry("400x600")
         self.root.attributes("-topmost", True)  # 常に最前面に表示
         self.root.attributes("-alpha", 0.95)  # 少し透明に
@@ -59,7 +59,7 @@ class BiiDesktopApp:
         
         title_label = tk.Label(
             title_frame,
-            text="🐱 猫使ビィ",
+            text="🐱 猫使Bii",
             font=("Arial", 16, "bold"),
             bg="#2C3E50",
             fg="white"
@@ -164,7 +164,7 @@ class BiiDesktopApp:
                 self.voice = VoicevoxAdapter()
                 self.vts = VTSAdapter()
                 self.status_label.config(text="✓ 初期化完了", fg="green")
-                self._add_chat_message("システム", "猫使ビィが起動しましたにゃ！")
+                self._add_chat_message("システム", "猫使Biiが起動しましたにゃ！")
             except Exception as e:
                 self.status_label.config(text=f"✗ 初期化失敗: {e}", fg="red")
         
@@ -287,7 +287,7 @@ class BiiDesktopApp:
         self._add_chat_message("マスター", user_text)
         
         if not self.bii:
-            self._add_chat_message("ビィ", "[Sad] まだ初期化中だにゃ...")
+            self._add_chat_message("Bii", "[Sad] まだ初期化中だにゃ...")
             return
         
         def process_async():

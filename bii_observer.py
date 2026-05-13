@@ -1,6 +1,6 @@
 """
-猫使ビィ・オブザーバーモード
-画面を定期的にキャプチャし、Ollamaで直接処理してボク（猫使ビィ）に喋らせるメインループ
+猫使Bii・オブザーバーモード
+画面を定期的にキャプチャし、Ollamaで直接処理してボク（猫使Bii）に喋らせるメインループ
 """
 
 import asyncio
@@ -27,7 +27,7 @@ async def main():
     vts = VTSAdapter()
 
     print("=" * 60)
-    print("  猫使ビィ・オブザーバーモード 起動だにゃ！")
+    print("  猫使Bii・オブザーバーモード 起動だにゃ！")
     print(f"  テキストモデル（ローカル）: {OLLAMA_MODEL}")
     print(f"  画像分析モデル（クラウド）: Gemini 2.5 Flash")
     print(f"  観察間隔: {CHECK_INTERVAL}秒")
@@ -62,11 +62,11 @@ async def main():
             img_base64, window_title = vision.capture_screen(scale=0.7, save_debug=True)
             print(f"[Vision] ✓ キャプチャ完了（debug_vision.pngに保存済み、ウィンドウ: {window_title}）")
             
-            # 2. ボク（ビィ）の「脳」で画面を分析（ウィンドウタイトルも渡してメタ情報として活用）
+            # 2. ボク（Bii）の「脳」で画面を分析（ウィンドウタイトルも渡してメタ情報として活用）
             print("[BiiCore] 画面を分析中...")
             response_text = bii.observe_screen(img_base64, window_title=window_title, user_input=None)
             print(f"[BiiCore] ✓ 分析完了")
-            print(f"ビィの気づき: {response_text}")
+            print(f"Biiの気づき: {response_text}")
 
             # 3. 感情タグの抽出と表情制御
             emotion_tag = bii.extract_emotion_tag(response_text)

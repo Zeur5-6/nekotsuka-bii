@@ -43,7 +43,7 @@ async def main():
                 return False
     
     print("==========================================")
-    print("   猫使ビィ・対話テストモード（長期記憶）   ")
+    print("   猫使Bii・対話テストモード（長期記憶）   ")
     print("==========================================")
     
     # Live2Dサーバーに接続（音声とリップシンクはサーバー側で実行）
@@ -94,7 +94,7 @@ async def main():
                 
                 result = bii.handle_command(command, args)
                 if result:
-                    print(f"ビィ: {result}")
+                    print(f"Bii: {result}")
                     
                     # 感情タグの抽出と表情制御
                     if connected:
@@ -125,7 +125,7 @@ async def main():
             response = await loop.run_in_executor(None, bii.generate_response, user_input, None)
             print("[Debug] 生成完了")
             
-            print(f"ビィ: {response}")
+            print(f"Bii: {response}")
             
             # 感情タグの抽出と表情制御
             if connected:
