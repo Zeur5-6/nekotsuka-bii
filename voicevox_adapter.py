@@ -112,5 +112,5 @@ class VoicevoxAdapter:
 # テスト実行用
 if __name__ == "__main__":
     adapter = VoicevoxAdapter()
-    adapter.play_voice("こんにちは、猫使Biiですにゃ！")
+    adapter.play_voice("こんにちは、Biiですにゃ！")
 

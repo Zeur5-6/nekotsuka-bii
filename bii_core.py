@@ -18,7 +18,7 @@ load_dotenv()
 
 class BiiCore:
     """
-    猫使Biiの「脳」
+    Biiの「脳」
     4段階推論フレームワーク + VTube Studio表情制御同期
     """
     
@@ -302,7 +302,7 @@ class BiiCore:
             projects = [f"{p['name']} ({p['status']})" for p in self.long_term_memory["projects"]]
             memory_section += f"\n【マスターの既知の情報・プロジェクト】: {', '.join(projects)}"
         
-        return f"""あなたは「猫使Bii」。CS学生（マスター）の相棒だにゃ。
+        return f"""あなたは「Bii」。CS学生（マスター）の相棒だにゃ。
 
 【最重要：表情制御システム（物理的同期）】
 ボクの出力冒頭のタグは、VTube Studioの表情ファイル（.exp3.json）を直接制御する信号だ。
@@ -313,7 +313,7 @@ class BiiCore:
 {memory_section}
 
 【応答生成のルール（内部処理、出力に含めないこと）】
-以下の情報源から事実を確認し、猫使Biiとして自然に応答せよ：
+以下の情報源から事実を確認し、Biiとして自然に応答せよ：
 1. 視覚事実（vision_result）: Gemini Vision APIによる画面分析結果（英語）
 2. Web検索結果: 最新の情報（タイトル、URL、スニペット）
 3. 参照コード（コード検索結果）: マスターのプロジェクト内のコードファイル

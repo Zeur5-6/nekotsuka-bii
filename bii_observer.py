@@ -1,6 +1,6 @@
 """
-猫使Bii・オブザーバーモード
-画面を定期的にキャプチャし、Ollamaで直接処理してボク（猫使Bii）に喋らせるメインループ
+Bii・オブザーバーモード
+画面を定期的にキャプチャし、Ollamaで直接処理してボク（Bii）に喋らせるメインループ
 """
 
 import asyncio
@@ -27,7 +27,7 @@ async def main():
     vts = VTSAdapter()
 
     print("=" * 60)
-    print("  猫使Bii・オブザーバーモード 起動だにゃ！")
+    print("  Bii・オブザーバーモード 起動だにゃ！")
     print(f"  テキストモデル（ローカル）: {OLLAMA_MODEL}")
     print(f"  画像分析モデル（クラウド）: Gemini 2.5 Flash")
     print(f"  観察間隔: {CHECK_INTERVAL}秒")
