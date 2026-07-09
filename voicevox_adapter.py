@@ -1,116 +1,122 @@
 """
 VOICEVOX API アダプター
-VOICEVOXを使用してテキストを音声合成・再生するクラス
-"""
 
-import requests
+- synthesize(): テキスト → (audio_query, WAVバイナリ)。リップシンク用に query も返す
+- play_wav(): WAV バイナリを pygame で再生（ブロッキング可）
+- play_voice(): 上記2つを組み合わせた従来互換 API（非ブロッキング再生）
+
+live2d_server.py 側に重複していた合成ロジックはここに一本化した。
+"""
 import io
-import pygame
-from typing import Optional
+import time
+from typing import Optional, Tuple
 from urllib.parse import quote
+
+import pygame
+import requests
+
+from config import (AUDIO_DEVICE_NAME, VOICEVOX_SPEAKER_ID, VOICEVOX_URL,
+                    get_logger)
+
+log = get_logger("Voicevox")
 
 
 class VoicevoxAdapter:
-    """
-    VOICEVOX API を使用してテキストを音声合成・再生するアダプタークラス
-    
-    主な機能:
-    - play_voice(text): テキストを音声合成して再生
-    """
-    
-    def __init__(self, voicevox_url: str = "http://localhost:50021", speaker_id: int = 58):
+    """VOICEVOX API を使用してテキストを音声合成・再生するアダプター"""
+
+    def __init__(self, voicevox_url: str = None, speaker_id: int = None):
         """
-        VoicevoxAdapterを初期化
-        
         Args:
-            voicevox_url: VOICEVOX API のURL（デフォルト: http://localhost:50021）
-            speaker_id: スピーカーID（デフォルト: 58 = 四国めたん（ノーマル））
+            voicevox_url: VOICEVOX API の URL（None なら config.VOICEVOX_URL）
+            speaker_id: スタイルID（None なら config.VOICEVOX_SPEAKER_ID。
+                        既定 58 = 猫使ビィ（ノーマル））
         """
-        self.voicevox_url = voicevox_url
-        self.speaker_id = speaker_id
+        self.voicevox_url = voicevox_url or VOICEVOX_URL
+        self.speaker_id = speaker_id if speaker_id is not None else VOICEVOX_SPEAKER_ID
         self.enabled = True
-        
-        # pygameの初期化（音声出力用）
+
         try:
             pygame.mixer.pre_init(
-                frequency=24000,
-                size=-16,
-                channels=1,
-                devicename="CABLE Input (VB-Audio Virtual Cable)"
-            )
+                frequency=24000, size=-16, channels=1,
+                devicename=AUDIO_DEVICE_NAME)
             pygame.mixer.init()
-            print("[VoicevoxAdapter] pygame初期化完了（CABLE Input）")
+            log.info(f"pygame初期化完了（{AUDIO_DEVICE_NAME}）")
         except Exception as e:
-            print(f"[VoicevoxAdapter] 警告: CABLE Inputでの初期化に失敗しました: {e}")
+            log.warning(f"{AUDIO_DEVICE_NAME} での初期化に失敗、既定デバイスを試します: {e}")
             try:
-                pygame.mixer.pre_init(
-                    frequency=24000,
-                    size=-16,
-                    channels=1
-                )
+                pygame.mixer.pre_init(frequency=24000, size=-16, channels=1)
                 pygame.mixer.init()
-                print("[VoicevoxAdapter] pygame初期化完了（既定デバイス）")
+                log.info("pygame初期化完了（既定デバイス）")
             except Exception as e2:
-                print(f"[VoicevoxAdapter] 警告: pygame初期化に失敗しました: {e2}")
+                log.warning(f"pygame初期化に失敗（音声無効）: {e2}")
                 self.enabled = False
-    
-    def play_voice(self, text: str) -> bool:
+
+    def synthesize(self, text: str) -> Optional[Tuple[dict, bytes]]:
+        """テキストを音声合成して (audio_query, WAVバイナリ) を返す
+
+        audio_query にはモーラ長情報が含まれ、リップシンク生成
+        （lipsync_utils.build_viseme_sequence）に使える。失敗時は None。
         """
-        VOICEVOXを使用してテキストを音声合成・再生
-        
-        Args:
-            text: 音声化するテキスト
-            
-        Returns:
-            bool: 成功した場合はTrue、失敗した場合はFalse
-        """
-        if not self.enabled:
-            print("[VoicevoxAdapter] 警告: VOICEVOXが無効です")
-            return False
-        
         if not text or not text.strip():
-            print("[VoicevoxAdapter] 警告: テキストが空です")
-            return False
-        
+            return None
         try:
-            # 音声クエリの作成
             res1 = requests.post(
                 f"{self.voicevox_url}/audio_query?speaker={self.speaker_id}&text={quote(text)}",
-                timeout=10
-            )
+                timeout=10)
             res1.raise_for_status()
             query = res1.json()
 
-            # 音声データの生成（WAVバイナリ）
             res2 = requests.post(
                 f"{self.voicevox_url}/synthesis?speaker={self.speaker_id}",
-                json=query,
-                timeout=60
-            )
+                json=query, timeout=60)
             res2.raise_for_status()
-            
-            # pygameで再生
-            sound_data = io.BytesIO(res2.content)
-            pygame.mixer.music.load(sound_data)
-            pygame.mixer.music.play()
-
-            # 再生が終わるまで待機しない（非同期再生のため）
-            # while pygame.mixer.music.get_busy():
-            #    pygame.time.Clock().tick(10)
-            
-            print(f"[VoicevoxAdapter] ✓ 音声再生開始: {text[:30]}...")
-            return True
-            
+            return query, res2.content
         except requests.exceptions.RequestException as e:
-            print(f"[VoicevoxAdapter] エラー: VOICEVOXへの接続に失敗しました: {e}")
+            log.error(f"VOICEVOXへの接続に失敗しました: {e}")
+            return None
+
+    def play_wav(self, wav_bytes: bytes, blocking: bool = False,
+                 max_duration: float = 30.0) -> bool:
+        """WAV バイナリを再生する
+
+        Args:
+            blocking: True なら再生完了（または max_duration 経過）まで待つ
+        """
+        if not self.enabled:
             return False
+        try:
+            pygame.mixer.music.load(io.BytesIO(wav_bytes))
+            pygame.mixer.music.play()
+            if blocking:
+                start = time.time()
+                while pygame.mixer.music.get_busy():
+                    if time.time() - start > max_duration:
+                        log.warning("音声再生がタイムアウトしました。強制停止します。")
+                        break
+                    pygame.time.Clock().tick(10)
+                pygame.mixer.music.stop()
+                pygame.mixer.music.unload()
+            return True
         except Exception as e:
-            print(f"[VoicevoxAdapter] エラー: 音声合成に失敗しました: {e}")
+            log.error(f"音声再生に失敗しました: {e}")
             return False
+
+    def play_voice(self, text: str) -> bool:
+        """テキストを音声合成して再生する（非ブロッキング、従来互換 API）"""
+        if not self.enabled:
+            log.warning("VOICEVOXが無効です（pygame初期化失敗）")
+            return False
+        result = self.synthesize(text)
+        if result is None:
+            return False
+        _, wav_bytes = result
+        ok = self.play_wav(wav_bytes, blocking=False)
+        if ok:
+            log.info(f"音声再生開始: {text[:30]}...")
+        return ok
 
 
 # テスト実行用
 if __name__ == "__main__":
     adapter = VoicevoxAdapter()
     adapter.play_voice("こんにちは、Biiですにゃ！")
-
