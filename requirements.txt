@@ -1,4 +1,5 @@
-# 猫使ビィ - 必須依存関係
+# Bii - 必須依存関係
+# インストール: python -m pip install -r requirements.txt
 
 # 1. サーバー & AIコア
 requests
@@ -6,19 +7,23 @@ python-dotenv
 google-genai
 sentence-transformers
 numpy
+# Web検索（DuckDuckGo）
+ddgs
 
 # 2. 画像認識・操作
 Pillow
 pyautogui
-# pygetwindow (一部ロジックで使用)
 pygetwindow
 
 # 3. 音声・通信
 websockets
 pygame
 pyaudio
-# SpeechRecognition (将来用/WebUI用)
+# SpeechRecognition (デスクトップUIの音声入力用)
 SpeechRecognition
 
 # 4. Web UI (Optional)
 streamlit
+
+# 5. 開発用 (Optional)
+pytest
