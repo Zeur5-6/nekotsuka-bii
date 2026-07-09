@@ -11,6 +11,10 @@ my_knowledge.txt
 
 # 生成ファイル
 available_models.txt
+.rag_cache.npz
+.rag_cache.json
+bii_memory.db-wal
+bii_memory.db-shm
 
 # デバッグ出力
 debug_vision.png
