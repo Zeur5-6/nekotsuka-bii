@@ -22,8 +22,8 @@
 ```
 ┌─────────────────────────────────────────────┐
 │                  bii_core.py                │
-│  4 段階推論 → 感情タグ抽出 → 応答生成        │
-│  長期記憶 (SQLite)  /  RAG (Sentence-BERT)  │
+│  ツール自律選択 (tool calling) → 応答生成    │
+│  長期記憶 (SQLite/WAL)  /  RAG (SBERT)      │
 │  画面分析 (Gemini Vision API)               │
 └────┬──────────┬──────────┬──────────────────┘
      │          │          │
@@ -45,10 +45,10 @@ bii_chat.py  bii_web.py  bii_observer.py   bii_desktop.py
 
 | 機能 | 実装 |
 |------|------|
-| **4 段階推論** | 事実確認 → 推論 → 生成 → 品質改善のパイプライン (`bii_core.py`) |
-| **画面認識** | `pyautogui` でキャプチャ → Gemini 1.5 Flash で解析 |
-| **長期記憶** | SQLite に興味・プロジェクトを永続化、起動時に自動読み込み |
-| **セマンティック検索** | Sentence Transformers でコードを埋め込みベクトル化して検索 |
+| **ツール自律選択** | Web検索・コード検索の要否を LLM 自身が判断（Ollama tool calling、非対応モデルは自動フォールバック） |
+| **画面認識** | 全画面キャプチャ（長辺 1024px）→ Gemini 2.5 Flash 系で解析（モデル自動フォールバック付き） |
+| **長期記憶** | SQLite (WAL) に興味・プロジェクトを永続化、起動時に自動読み込み |
+| **セマンティック検索** | コードを 40 行チャンクで埋め込みベクトル化して検索（埋め込みはディスクにキャッシュ） |
 | **Live2D 表情制御** | 応答内の感情タグ `[Happy]` `[Sad]` 等を VTS API / Electron に送信 |
 | **音声合成** | VOICEVOX REST API → pygame で再生（VB-Audio 仮想デバイス対応） |
 | **自動観察モード** | 指定間隔で画面をキャプチャし、変化を音声でコメント |
@@ -85,7 +85,7 @@ bii_chat.py  bii_web.py  bii_observer.py   bii_desktop.py
 ### 1. Python 依存関係
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 ### 2. Ollama モデル
@@ -108,6 +108,10 @@ GEMINI_API_KEY=your_gemini_api_key_here
 ```
 
 API キーの取得: https://aistudio.google.com/app/apikey
+
+その他の設定（Ollama モデル、VOICEVOX 話者、各種 URL・間隔など）は
+`config.py` に集約されており、`.env` の `BII_*` 変数で上書きできます
+（一覧は [.env.example](./.env.example) を参照）。
 
 ### 4. 動作確認
 
@@ -180,12 +184,15 @@ npm start
 
 ```
 .
-├── bii_core.py          # コア AI エンジン（推論・記憶・VTS 制御）
+├── bii_core.py          # コア AI エンジン（tool calling・記憶・視覚）
+├── config.py            # 設定の一元管理（.env の BII_* で上書き可）
+├── emotion_utils.py     # 感情タグ ⇔ 表情ファイルの共通変換ロジック
+├── lipsync_utils.py     # VOICEVOX audio_query → 口パク列（純粋関数）
 ├── bii_chat.py          # CLI 対話インターフェース
 ├── bii_observer.py      # 自動画面観察ループ
 ├── bii_web.py           # Streamlit Web UI
 ├── bii_desktop.py       # Tkinter デスクトップ UI
-├── bii_rag.py           # セマンティックコード検索 (RAG)
+├── bii_rag.py           # セマンティックコード検索 (RAG・埋め込みキャッシュ付き)
 ├── bii_tools.py         # Web 検索ツール
 ├── vision_module.py     # 画面キャプチャモジュール
 ├── voicevox_adapter.py  # VOICEVOX 音声合成アダプター
@@ -193,8 +200,11 @@ npm start
 ├── live2d_server.py     # Python ↔ Electron WebSocket サーバー
 ├── live2d_app/          # Electron Live2D アプリ
 │   ├── main.js          # Electron メインプロセス
+│   ├── preload.js       # contextBridge（レンダラーへの安全な API 公開）
 │   ├── index.html       # Live2D Canvas
+│   ├── renderer.js      # 描画・リップシンク・WebSocket クライアント
 │   └── models/          # Live2D モデルファイル（※ .gitignore 推奨）
+├── tests/               # pytest ユニットテスト
 ├── requirements.txt
 └── ARCHITECTURE.md      # 詳細アーキテクチャ仕様書
 ```

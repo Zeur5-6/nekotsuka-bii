@@ -24,11 +24,14 @@
 ```
 modelfile/
 ├── live2d_server.py          # ★ メインサーバー（WebSocket、AI連携のハブ）
-├── bii_core.py               # ★ AIの「脳」（4段階推論、会話、記憶、視覚）
+├── bii_core.py               # ★ AIの「脳」（tool calling、会話、記憶、視覚）
+├── config.py                 # 設定の一元管理（URL・話者ID・間隔など、BII_* で上書き可）
+├── emotion_utils.py          # 感情タグ ⇔ 表情ファイル変換（全コンポーネント共通）
+├── lipsync_utils.py          # audio_query → 口パク列の純粋関数
 ├── voicevox_adapter.py       # VOICEVOX連携（TTS・リップシンク用）
 ├── vts_adapter.py            # VTube Studio連携（表情制御）
 ├── vision_module.py          # 画面キャプチャ（BiiVision）
-├── bii_rag.py                # コード検索RAG（CodeReader）
+├── bii_rag.py                # コード検索RAG（CodeReader、埋め込みキャッシュ付き）
 ├── bii_tools.py              # Web検索ツール
 ├── bii_chat.py               # 対話型CLI
 ├── bii_web.py                # Streamlit Web UI
@@ -40,8 +43,9 @@ modelfile/
 ├── vts_token.json            # VTS認証トークン（自動生成）
 │
 ├── live2d_app/               # ★ Electron版Live2Dクライアント
-│   ├── main.js               # Electronメインプロセス（ウィンドウ作成）
-│   ├── index.html            # HTMLシェル、PIXI/Live2D読み込み
+│   ├── main.js               # Electronメインプロセス（ウィンドウ作成、find-model IPC）
+│   ├── preload.js            # contextBridge（window.biiAPI としてIPCを公開）
+│   ├── index.html            # HTMLシェル、PIXI/Live2D読み込み（UMDビルド）
 │   ├── renderer.js           # レンダラープロセス（Live2D表示、WebSocket、UI）
 │   ├── package.json          # Node.js依存関係
 │   └── models/bii/           # Live2Dモデルファイル
@@ -142,13 +146,14 @@ modelfile/
 |---------------|------------|----------|
 | `init_components()` | `run()` | BiiCore, VoicevoxAdapter, VTSAdapter を初期化 |
 | `handle_client()` | websockets.serve | クライアント接続時に呼ばれ、`handle_message()` でメッセージを処理 |
-| `process_user_input()` | `handle_message` (user_input) | BiiCore.generate_response() → 感情抽出 → 音声キュー or 応答送信 |
-| `process_vision_request()` | `handle_message` (vision_request) | 画面キャプチャ → observe_screen() → 感情・音声・応答 |
+| `process_user_input()` | `handle_message` (user_input) | BiiCore.generate_response()（executor実行）→ 感情抽出 → 音声キュー or 応答送信 |
+| `process_vision_request()` | `handle_message` (vision_request) | 画面キャプチャ → observe_screen()（executor実行）→ 感情・音声・応答 |
 | `_audio_worker()` | 起動時 | 音声キューを処理し、VOICEVOXで合成 → リップシンク送信 → 再生 |
-| `_play_voice_with_lipsync()` | _audio_worker | audio_query → synthesis → viseme列 → broadcast(lipsync) → pygame再生 |
-| `extract_emotion()` | process_* | 応答テキストから [Happy], [Sad] 等のタグを抽出 |
+| `_play_voice_with_lipsync()` | _audio_worker | VoicevoxAdapter.synthesize() → viseme列 → broadcast(lipsync/mouth_form) → play_wav(blocking) |
 | `send_emotion()` | process_* | broadcast({ type: "expression", name }) |
 | `broadcast()` | 各種 | 全接続クライアントにJSONメッセージを送信 |
+
+**重要**: LLM生成・Gemini分析などの重い同期処理は必ず `run_in_executor` で別スレッドに逃がす。イベントループ上で直接呼ぶと、生成完了まで ping/pong・音声ワーカーを含む全処理が停止する。感情タグの抽出は `BiiCore.extract_emotion_tag()`（実装は `emotion_utils.py`）を共通利用する。
 
 **重要**: `_send_viseme_sequence()` は VOICEVOX の `accent_phrases` から母音ごとの口の開き度を計算し、60FPSで `lipsync` メッセージを送信する。
 
@@ -156,11 +161,16 @@ modelfile/
 
 ### 4.2 bii_core.py（AIの脳）
 
-**役割**: 4段階推論フレームワーク、会話、記憶、視覚、コマンド処理。
+**役割**: tool calling ベースの会話生成、記憶、視覚、コマンド処理。
+
+応答生成は Ollama の tool calling を使い、`web_search` / `code_search` を使うかどうかを
+LLM 自身が判断する（最大2ラウンド）。tool calling 非対応のモデルでは自動的に
+ツールなしにフォールバックする。応答の感情タグは `_post_process_response()` で検証され、
+実在しないタグは `[Neutral]` に補正される。
 
 | 主なメソッド | 使用箇所 | 処理内容 |
 |--------------|----------|----------|
-| `generate_response()` | live2d_server.process_user_input | ユーザー入力 → Ollama API → 応答テキスト |
+| `generate_response()` | live2d_server.process_user_input | ユーザー入力 → Ollama API（tool calling）→ 応答テキスト。`save_history` / `extract_facts` フラグで履歴保存・記憶抽出を制御 |
 | `handle_command()` | live2d_server.process_user_input | `/vision`, `/memory` 等のスラッシュコマンド |
 | `observe_screen()` | live2d_server.process_vision_request | Base64画像 + ウィンドウタイトル → Gemini Vision API → 分析結果 |
 | `clean_text_for_voice()` | live2d_server | 感情タグ等を除去してVOICEVOX用テキストに変換 |
@@ -169,9 +179,9 @@ modelfile/
 | `update_expressions_from_vts()` | live2d_server.connect_vts | VTSの表情リストでBiiCoreの感情マッピングを更新 |
 
 **外部依存**:
-- Ollama (http://localhost:11434) … 会話LLM
-- Gemini API (GEMINI_API_KEY) … 視覚分析
-- SQLite (bii_memory.db) … 長期記憶
+- Ollama (http://localhost:11434) … 会話LLM（tool calling 対応モデル推奨: qwen2.5:7b 等）
+- Gemini API (GEMINI_API_KEY) … 視覚分析（候補モデルを順に試行、成功したモデルを次回優先）
+- SQLite (bii_memory.db, WALモード) … 長期記憶・会話履歴
 
 ---
 
@@ -181,7 +191,7 @@ modelfile/
 
 | メソッド | 処理 |
 |----------|------|
-| `capture_screen(scale, save_debug)` | `ImageGrab.grab()` で全画面キャプチャ → 384px以内にリサイズ → Base64 JPEG → `debug_vision.png` 保存 |
+| `capture_screen(max_px, save_debug)` | `ImageGrab.grab()` で全画面キャプチャ → 長辺 1024px（config.VISION_MAX_PX）にリサイズ → Base64 JPEG → `debug_vision.png` 保存。アクティブウィンドウのタイトルもメタ情報として返す |
 
 **使用箇所**: `live2d_server.process_vision_request()` 内で `self.bii.vision.capture_screen()` として呼ばれる。
 
@@ -193,10 +203,17 @@ modelfile/
 
 | 設定 | デフォルト |
 |------|------------|
-| voicevox_url | http://localhost:50021 |
-| speaker_id | 58（四国めたん ノーマル） |
+| voicevox_url | http://localhost:50021 (config.VOICEVOX_URL) |
+| speaker_id | 58（猫使ビィ ノーマル、config.VOICEVOX_SPEAKER_ID） |
 
-**使用箇所**: `live2d_server._play_voice_with_lipsync()` 内で、`audio_query` と `synthesis` を呼び、音声再生とリップシンク用の viseme 列を生成。実際の再生は pygame で行う。
+| 主なメソッド | 処理 |
+|--------------|------|
+| `synthesize(text)` | audio_query → synthesis を実行し `(query, WAVバイナリ)` を返す |
+| `play_wav(wav, blocking)` | WAVバイナリを pygame で再生（ブロッキング可） |
+| `play_voice(text)` | synthesize + play_wav の従来互換API（非ブロッキング） |
+
+**使用箇所**: `live2d_server._play_voice_with_lipsync()` が `synthesize()` の query から
+`lipsync_utils.build_viseme_sequence()` で viseme 列を生成し、`play_wav(blocking=True)` で再生する。
 
 ---
 
@@ -207,9 +224,9 @@ modelfile/
 | 主なメソッド | 処理 |
 |--------------|------|
 | `connect()` | 認証トークン取得・保存 (vts_token.json) |
-| `get_expressions()` | 利用可能な表情リスト取得 |
+| `get_expressions()` | 利用可能な表情リスト取得＋感情タグ→ファイルのマッピングを実ファイルで再構築 |
 | `trigger_expression()` | 指定表情ファイルを実行 |
-| `set_expression()` | 感情タグ (Happy, Sad等) から表情を設定 |
+| `set_expression()` | 感情タグ (Happy, Sad等) から表情を設定（マッピングは `emotion_utils.build_emotion_to_file_map` で動的生成。shock/surprised 等の命名差を吸収） |
 
 **使用箇所**: `live2d_server.connect_vts()` で接続し、`connect_vts` メッセージ受信時に呼ばれる。BiiCore の表情マッピング更新にも利用。
 
@@ -221,28 +238,33 @@ modelfile/
 
 | 処理 | 内容 |
 |------|------|
-| `createWindow()` | 透明・常に最前面のフレームレスウィンドウ (400x600) |
+| `createWindow()` | 透明・常に最前面のフレームレスウィンドウ (400x600)。`contextIsolation: true` / `nodeIntegration: false` |
 | IPC | `minimize-window`, `close-window`, `restore-window`, `move-window` 等 |
+| `find-model` (invoke) | `models/bii/` を走査して `.model3.json` の file:// URL を返す（fsアクセスはメインプロセスのみ） |
+
+#### preload.js
+
+- `contextBridge.exposeInMainWorld('biiAPI', ...)` でウィンドウ操作とモデル探索だけをレンダラーに公開
 
 #### index.html
 
-- PIXI.js と pixi-live2d-display (Cubism 4) を読み込み
 - Live2D Cubism Core (`live2dcubismcore.min.js`) を読み込み
+- PIXI.js と pixi-live2d-display (Cubism 4) を **node_modules の UMD ビルド**を `<script>` タグで読み込み（require 不使用）
 - `renderer.js` を読み込み
 
 #### renderer.js（レンダラープロセス）
 
 | 機能 | 実装 |
 |------|------|
-| WebSocket接続 | `ws://localhost:8765` に接続、3秒ごとに再接続 |
+| WebSocket接続 | ブラウザ標準 WebSocket で `ws://localhost:8765` に接続、3秒ごとに再接続 |
 | メッセージ処理 | `handleMessage()` で type に応じて分岐 |
-| Live2D初期化 | `initLive2D()` で PIXI.Application 作成 → `models/bii/` からモデル検索 → `Live2DModel.from()` |
-| 表情 | `setExpression()` で `expressionMap` に基づき `model.expression()` を呼び出し |
-| リップシンク | `lipsync` メッセージで `model.targetMouthValue` を設定、ticker で `ParamMouthOpenY` に補間適用 |
+| Live2D初期化 | `initLive2D()` で PIXI.Application 作成 → `biiAPI.findModel()` でモデル取得 → `Live2DModel.from()` |
+| 表情 | `setExpression()` でタグ名を小文字化して `model.expression()`、Neutral は `resetExpression()` |
+| リップシンク | `lipsync` で `ParamMouthOpenY`（開き 0..1）、`mouth_form` で `ParamMouthForm`（形 -1..1）を ticker で補間適用 |
 | 字幕 | `response` で `showSubtitle()`、5秒後にフェードアウト |
 | チャット入力 | Enter で `user_input` 送信 |
 | 視覚ボタン | `vision_request` 送信（入力欄のテキストも送信可） |
-| ドラッグ | 左: モデル移動、右: ウィンドウ移動、ホイール: スケール |
+| ドラッグ | 左: モデル移動、右: ウィンドウ移動、Ctrl+ホイール: スケール |
 
 ---
 
@@ -265,7 +287,8 @@ modelfile/
 | `response` | `text` | AI応答テキスト（字幕表示） |
 | `expression` | `name` | 表情名 (Happy, Sad, Angry, Surprised, Neutral) |
 | `emotion` | `emotion` | 同上（互換） |
-| `lipsync` | `value` | 口の開き度 0.0～1.0 |
+| `lipsync` | `value` | 口の開き度 0.0～1.0 (ParamMouthOpenY) |
+| `mouth_form` | `value` | 口の形 -1.0～1.0 (ParamMouthForm、「い」「う」等の形状) |
 | `motion` | `motion` | モーション名 |
 | `status` | `status` | ステータスメッセージ |
 | `restore` | - | ウィンドウ復帰（画面キャプチャ後の表示復元） |
@@ -340,11 +363,13 @@ npm start
 
 | ファイル/変数 | 用途 |
 |---------------|------|
-| `.env` | `GEMINI_API_KEY`（Gemini Vision API用、必須） |
+| `config.py` | 全設定の一元管理（URL・話者ID・観察間隔・ログレベル等）。`.env` の `BII_*` で上書き可 |
+| `.env` | `GEMINI_API_KEY`（必須）と `BII_*` 設定の上書き（.env.example 参照） |
 | `requirements.txt` | Python依存関係 |
-| `live2d_app/package.json` | Node.js依存関係（pixi.js, pixi-live2d-display, ws, electron） |
+| `live2d_app/package.json` | Node.js依存関係（pixi.js, pixi-live2d-display, electron） |
 | `vts_token.json` | VTS認証トークン（connect_vts 時に自動生成） |
-| `bii_memory.db` | SQLite長期記憶（初回実行時に自動作成） |
+| `bii_memory.db` | SQLite長期記憶（初回実行時に自動作成、WALモード） |
+| `.rag_cache.npz` / `.rag_cache.json` | コード埋め込みのディスクキャッシュ（自動生成・自動無効化） |
 
 ### 外部サービス（起動が必要）
 
@@ -393,14 +418,15 @@ live2d_app/models/bii/
 
 ### Python (requirements.txt)
 
-- **サーバー・AI**: requests, python-dotenv, google-genai, sentence-transformers, numpy
+- **サーバー・AI**: requests, python-dotenv, google-genai, sentence-transformers, numpy, ddgs
 - **画像**: Pillow, pyautogui, pygetwindow
 - **音声・通信**: websockets, pygame, pyaudio, SpeechRecognition
 - **Web UI**: streamlit
+- **開発**: pytest（tests/ のユニットテスト用）
 
 ### Node.js (live2d_app/package.json)
 
-- pixi.js, pixi-live2d-display, ws（本番）
+- pixi.js, pixi-live2d-display（本番。レンダラーは UMD ビルドを script タグで読み込み）
 - electron（devDependencies）
 
 ### Native (live2d_native)
