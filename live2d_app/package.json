@@ -1,7 +1,7 @@
 {
   "name": "bii-live2d-desktop",
   "version": "1.0.0",
-  "description": "猫使ビィ・Live2Dデスクトップ常駐アプリ",
+  "description": "Bii・Live2Dデスクトップ常駐アプリ",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -16,9 +16,7 @@
   "license": "MIT",
   "dependencies": {
     "pixi-live2d-display": "^0.4.0",
-    "pixi.js": "^6.5.0",
-    "pixi.js-legacy": "^6.5.0",
-    "ws": "^8.14.2"
+    "pixi.js": "^6.5.0"
   },
   "devDependencies": {
     "electron": "^27.3.11"
